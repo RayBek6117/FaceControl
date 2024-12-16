@@ -40,6 +40,7 @@ while True:
     cv2.imshow("Image", img)
     cv2.waitKey(20)
 
+    # Выход из приложения при нажатии пробела 
     if keyboard.is_pressed("space"):
         break
 
