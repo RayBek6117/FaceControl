@@ -50,10 +50,6 @@ while True:
                 if id == 0:                                 # Выбираем конкретный ID landmark'и для вывода в консоль
                     print([id, x, y])
 
-
-
-    
-
     # Рассчет и отображение fps
     cTime = time.time()
     fps = 1/(cTime - pTime)

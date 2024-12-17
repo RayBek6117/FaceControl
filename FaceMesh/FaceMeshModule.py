@@ -3,7 +3,6 @@ import mediapipe as mp
 import time                
 import keyboard       
 
-
 class FaceMeshDetector():
     def __init__(self, static_mode = False, maxFaces = 2, refineLms = False,
                  minDetectionCon = 0.5, minTrackCon = 0.5):
