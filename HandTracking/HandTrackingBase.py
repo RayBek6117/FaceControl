@@ -27,7 +27,15 @@ while True:
     # Отображение рук в кадре
     if results.multi_hand_landmarks:
         for handLms in results.multi_hand_landmarks:
-           mpDraw.draw_landmarks(img, handLms, mpHands.HAND_CONNECTIONS) 
+           # вывод координат landmarks
+            for id, lm in enumerate(handLms.landmark):
+               print(id, lm)
+               # Координаты Для ручного отображения landmarks
+               h, w, c = img.shape
+               cx, cy = int(lm.x * w), int(lm.y * h)
+               if id == 8:
+                   cv2.circle(img, (cx, cy), 20, (255, 0, 0), cv2.FILLED)
+            mpDraw.draw_landmarks(img, handLms, mpHands.HAND_CONNECTIONS) 
 
     # Отображение fps
     cTime = time.time()
