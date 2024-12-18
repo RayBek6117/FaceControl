@@ -22,10 +22,16 @@
 ### Установить необходимые библиотеки можно при помощи pip:
 
 ```Terminal
-- pip install cmake
-- pip install dlib
-- pip install face-recognition
-- pip install opencv-python
+pip install cmake
+```
+```Terminal
+pip install dlib
+```
+```Terminal
+pip install face-recognition
+```
+```Terminal
+pip install opencv-python
 ```
 
 ## Примечание:
@@ -37,8 +43,17 @@
 
 ```Terminal
 $ brew install cmake
+```
+
+```Terminal
 $ pip install cmake
+```
+
+```Terminal
 $ brew install dlib
+```
+
+```Terminal
 $ pip install dlib
 ```
 
