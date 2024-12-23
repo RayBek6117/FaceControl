@@ -1,94 +1,129 @@
 import face_recognition
 import cv2
-import os
-from PIL import Image
+import csv
+import ast  # Для преобразования строкового представления списков в списки
+from datetime import datetime
+import time
 
-# Function to load and encode faces from the "img" folder
-def load_known_faces(known_faces_dir):
+# Функция для загрузки известных лиц из CSV-файла
+def load_known_faces_from_csv(csv_file):
     known_encodings = []
     known_names = []
 
-    for file_name in os.listdir(known_faces_dir):
-        if file_name.endswith(('.jpg', '.jpeg', '.png')):  # Process image files only
-            img_path = os.path.join(known_faces_dir, file_name)
-            image = face_recognition.load_image_file(img_path)
-            encodings = face_recognition.face_encodings(image)
-
-            if encodings:  # Ensure face was found
-                known_encodings.append(encodings[0])
-                name = os.path.splitext(file_name)[0]  # Extract name from file name
-                known_names.append(name)
+    with open(csv_file, mode='r') as file:
+        reader = csv.reader(file)
+        next(reader)  # Пропускаем строку заголовков
+        for row in reader:
+            name, encoding_str = row
+            encoding = ast.literal_eval(encoding_str)  # Преобразуем строку в список
+            known_encodings.append(encoding)
+            known_names.append(name)
 
     return known_encodings, known_names
 
-# Real-time face recognition
-def real_time_face_recognition(known_encodings, known_names):
-    video_capture = cv2.VideoCapture(0)  # Open webcam (0 is the default camera)
+# Функция для добавления записи в журнал
+def log_entry_to_csv(name, action, csv_file):
+    now = datetime.now()
+    current_time = now.strftime("%Y-%m-%d %H:%M:%S")  # Текущая дата и время
+
+    # Записываем в журнал каждое действие (приход или уход)
+    with open(csv_file, mode='a', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow([name, action, current_time])
+
+    print(f"Запись добавлена для {name}: {action} - {current_time}")
+
+# Функция для распознавания лиц в реальном времени
+def real_time_face_recognition(known_encodings, known_names, log_csv_file):
+    video_capture = cv2.VideoCapture(0)  # Открываем веб-камеру (0 — стандартная камера)
 
     if not video_capture.isOpened():
-        print("Error: Cannot open webcam.")
+        print("Ошибка: не удалось открыть веб-камеру.")
         return
 
+    face_last_seen = {}  # Словарь для отслеживания последнего времени появления лица
+
     while True:
-        ret, frame = video_capture.read()  # Capture a frame from the webcam
+        ret, frame = video_capture.read()  # Считываем кадр с веб-камеры
         if not ret:
-            print("Error: Unable to capture frame.")
+            print("Ошибка: не удалось захватить кадр.")
             break
 
-        # Resize frame for faster face detection
+        # Уменьшаем размер кадра для ускорения обработки
         small_frame = cv2.resize(frame, (0, 0), fx=0.5, fy=0.5)
 
-        # Find faces in the frame
+        # Ищем лица на кадре
         face_locations = face_recognition.face_locations(small_frame)
         face_encodings = face_recognition.face_encodings(small_frame, face_locations)
 
         for face_encoding, face_location in zip(face_encodings, face_locations):
-            # Compare the face encoding with known faces
+            # Сравниваем текущую кодировку лица с известными
             face_distances = face_recognition.face_distance(known_encodings, face_encoding)
 
-            # Find the closest match if there are encodings
+            # Ищем ближайшее совпадение
             if len(face_distances) > 0:
-                best_match_index = face_distances.argmin()  # Get index of the minimum distance
-                if face_recognition.compare_faces([known_encodings[best_match_index]], face_encoding)[0]:
-                    name = known_names[best_match_index]
+                best_match_index = face_distances.argmin()  # Индекс минимальной дистанции
+                if face_recognition.compare_faces([known_encodings[best_match_index]], face_encoding, tolerance=0.4)[0]:
+                    name = known_names[best_match_index]  # Имя найденного лица
                 else:
-                    name = "Unknown"
+                    name = "Неизвестный"
             else:
-                name = "Unknown"
+                name = "Неизвестный"
 
-            # Draw a rectangle and label on the frame
+            # Если лицо распознано
+            if name != "Неизвестный":
+                current_time = time.time()
+
+                if name not in face_last_seen or (current_time - face_last_seen[name]['time'] > 5):
+                    # Если лицо появляется впервые или прошло больше 5 секунд
+                    if name not in face_last_seen or face_last_seen[name]['action'] == 'Выход':
+                        print(f"Распознано лицо: {name}. Подтвердите вход (y/n): ")
+                        confirmation = input().strip().lower()
+                        if confirmation == 'y':
+                            log_entry_to_csv(name, 'Вход', log_csv_file)
+                            face_last_seen[name] = {'time': current_time, 'action': 'Вход'}
+                    elif face_last_seen[name]['action'] == 'Вход':
+                        print(f"Распознано лицо: {name}. Подтвердите выход (y/n): ")
+                        confirmation = input().strip().lower()
+                        if confirmation == 'y':
+                            log_entry_to_csv(name, 'Выход', log_csv_file)
+                            face_last_seen[name] = {'time': current_time, 'action': 'Выход'}
+
+            # Отображаем рамку вокруг лица и имя
             top, right, bottom, left = face_location
             top *= 2
             right *= 2
             bottom *= 2
             left *= 2
 
-            cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
-            cv2.putText(frame, name, (left, top - 10), cv2.FONT_HERSHEY_DUPLEX, 0.75, (0, 255, 0), 2)
+            cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)  # Рисуем прямоугольник
+            cv2.putText(frame, name, (left, top - 10), cv2.FONT_HERSHEY_DUPLEX, 0.75, (0, 255, 0), 2)  # Добавляем текст
 
-        # Display the resulting frame
+        # Отображаем обработанный кадр
         cv2.imshow('Face Recognition', frame)
 
-        # Exit on 'q' key
+        # Выход из программы по нажатию клавиши 'qq'
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
-    # Release the camera and close windows
+    # Освобождаем ресурсы камеры и закрываем окна
     video_capture.release()
     cv2.destroyAllWindows()
 
-
-# Main function
+# Главная функция
 def main():
-    known_faces_dir = "img"
-    known_encodings, known_names = load_known_faces(known_faces_dir)
+    known_faces_csv = "known_faces.csv"  # Файл с кодировками лиц
+    log_csv_file = "attendance_log.csv"  # Журнал посещений
+
+    # Загружаем известные лица
+    known_encodings, known_names = load_known_faces_from_csv(known_faces_csv)
 
     if not known_encodings:
-        print("No known faces loaded. Please add images to the 'img' folder.")
+        print("Не удалось загрузить известные лица. Сначала выполните обработку изображений.")
         return
 
-    print(f"Loaded {len(known_encodings)} known face(s). Starting real-time recognition...")
-    real_time_face_recognition(known_encodings, known_names)
+    print(f"Загружено {len(known_encodings)} известных лиц. Запуск распознавания...")
+    real_time_face_recognition(known_encodings, known_names, log_csv_file)
 
 if __name__ == "__main__":
     main()
